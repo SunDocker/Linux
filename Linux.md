@@ -641,6 +641,12 @@ VMWare提供了三种网络连接模式：
 
 - 如果以上全部设置完还是不行，需要关闭 NetworkManager 服务
 
+  > 其实更推荐去关闭centos6的network服务，然后重启centos7的NetworkManager服务
+  >
+  > `systemctl stop network` `systemctl restart NetworkManager`
+  >
+  > （有关服务的问题学到后面就明白了）
+
   - systemctl stop NetworkManager 关闭 
   - systemctl disable NetworkManager 禁用 
 
@@ -730,13 +736,162 @@ VMWare提供了三种网络连接模式：
 >
 >- **系统服务**：操作系统运行时需要很多后台服务的支撑，这些服务往往随着系统的引导装入而启动，直到系统关闭才会终止，这类服务统称为系统服务
 >
->  > 具体执行系统服务的进程往往称为**守护进程**（daemon），服务名以`d`结尾的服务往往就是守护进程运行的
+>  > 具体执行系统服务的进程往往称为**守护进程**（daemon），服务名以`d`结尾的服务往往就是守护进程运行的系统服务
 
 #### 4.1 service服务管理
 
-基本语法：
+centos6方式：（了解即可）
 
+- 基本语法：
+  - `service 服务名 start|stop|restart|status`
 
+- 服务目录：
+  - `/etc/init.d`
+
+  > 在centos7中这样查看服务的话，只能看到很少的服务，其实是 SysV 服务，其中有`network`，这几个服务用centos6和centos7方式调用都可以；
+  >
+  > 当然，centos7提供了**network的替代服务**，也就是`NetworkManager`
+
+:star:centos7方式：
+
+- 基本语法：
+
+  - `systemctl start|stop|restart|status 服务名`
+
+- 服务目录：
+
+  - `/usr/lib/systemd/`
+
+    ![image-20220716150804669](Linux.assets/image-20220716150804669.png)
+
+    > systemd不只自己是一个服务，它还是一个大家族，原生systemd服务
+
+  - 在`/usr/lib/systemd/system`下还有大量服务
+
+    > `xxx.service`就是**服务文件**，`xxx.target`可以理解为**一组服务的集合**
+
+#### 4.2 系统运行级别
+
+Linux 运行级别[CentOS 6]：
+
+- 启动过程：
+
+  <img src="Linux.assets/image-20220716152850132.png" alt="image-20220716152850132" style="zoom:80%;" />
+
+  > 主动启动的第一个进程就是`init进程`，然后该进程根据**系统运行级别**，启动对应运行级别下支持的服务
+
+- 运行级别：
+
+  ![image-20220716153026535](Linux.assets/image-20220716153026535.png)
+
+  > 运行级别1是很**安全**的，只能操作实体机器，单用户
+  >
+  > > 相当于windows系统的**安全模式**
+  >
+  > 运行级别2允许多个用户登录，但没有**网络**文件系统（NFS）
+  >
+  > 运行级别3就相当于是“完全体”了，很常用
+  >
+  > > 3断了网络文件系统就和2差不多了
+  >
+  > 运行级别5就是有图形化界面的样子了
+  >
+  > 运行级别0和6就很奇怪，系统都启动不了，当然也几乎不用；运行级别4也几乎用不到
+
+  >查看默认级别：`vi /etc/inittal`
+
+Linux 运行级别[CentOS 7]：
+
+>发现centos6中，绝大多数情况下能用到的运行级别就只有3和5
+
+- `multi-user.target` 等价于原运行级别 3（多用户有网，无图形界面）
+
+- `graphical.target` 等价于原运行级别 5（多用户有网，有图形界面）
+
+- 查看当前运行级别：`systemctl get-default`
+
+- 修改当前运行级别：`systemctl set-default TARGET.target`
+
+  这里 `TARGET `取 `multi-user` 或者 `graphical`
+
+  > 同样是需要重启才能生效
+
+  > 在VMware中用快捷键Ctrl Alt F2~F6就相当于修改运行级别为3了
+
+  > 其实有更简洁的命令：`init 3`和`init 5`
+
+#### 4.3 service自启动配置
+
+在centos图形界面中配置：
+
+- 在终端输入`setup`命令，可以进入系统服务相关的图形界面
+- 进入后按回车选择【系统服务】，之后按【空格】可以设置服务的开机自启
+- 按【tab】可以去到退出
+
+在终端命令行中配置：
+
+- centos6查看自启动服务：`chkconfig --list`
+
+  ```c
+  [root@hadoop200 ~]# chkconfig --list
+  
+  注：该输出结果只显示 SysV 服务，并不包含
+  原生 systemd 服务。SysV 配置数据
+  可能被原生 systemd 配置覆盖。 
+  
+        要列出 systemd 服务，请执行 'systemctl list-unit-files'。
+        查看在具体 target 启用的服务请执行
+        'systemctl list-dependencies [target]'。
+  
+  netconsole     	0:关	1:关	2:关	3:关	4:关	5:关	6:关
+  network        	0:关	1:关	2:开	3:开	4:开	5:开	6:关
+  ```
+
+  > 对于network服务，设置了开机自启动就是在2、3、4、5级别下开着，0、1、6没必要开
+
+- centos6开关自启动服务：`chkconfig 服务名 on|off`
+
+  - 开关对应级别：`chkconfig --level 级别 服务名 on|off`
+
+- :star:centos7查看所有服务的自启动状态：`systemctl list-unit-files`
+
+  > unit：在systemd管理模式下，所有服务都是一个unit，一个管理单元
+
+- :star:centos7查看某个服务的自启动状态：`systemctl status 服务名`
+
+  > `loaded`后面括号中的`enalbed`或`disabled`就代表了是否开机自启动，`vendor preset`是默认的配置情况
+
+- :star:centos7开关某个服务的自启动：`systemctl enable|disable 服务名`
+
+  > 按Ctrl C可以切出去
+
+> 尝试开关**防火墙服务**：
+>
+> - centos6及之前叫iptables
+>
+>   > 防火墙本质就是一张ip:port是否放行的表
+>
+> - centos7叫firewalld
+
+#### 4.4 关机重启命令
+
+Linux操作系统大多用于服务器，很少会有关机操作，不得以才会关机重启。
+
+关机：
+
+- `shutdown`系列：
+
+  - `shutdown`：一分钟后关机
+
+    > 为什么默认要等一分钟？
+
+  - `shutdown -c`：取消关机
+
+  - `shutdown now`：立刻关机
+
+  - `shutdown number`：number分钟后关机
+
+  - `shutdown hour:minute`：在今天hour:minute时关机
 
 ---
 
